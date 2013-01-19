@@ -5,24 +5,21 @@
   <meta http-equiv="X-UA-Compatible" content="IE=Edge"/>
   <title>FreeDee</title>
 
+  <link rel="stylesheet" href="../css/shared.css" />
+  <link rel="stylesheet" href="../css/fullscreen.css" />
+
   <script type="text/javascript" src="../lib/three.js"></script>
   <script type="text/javascript" src="../lib/Stats.js"></script>
   <script type="text/javascript" src="../lib/Detector.js"></script>
+  <script type="text/javascript" src="../lib/dat.gui.js"></script>
   <script type="text/javascript" src="../lib/headtrackr-0.1.0.js"></script>
-
-  <style type="text/css">
-    body { font-family:'Helvetica Neue', Helvetica, sans-serif; color:#CCC; background:#111; font-weight:100; }
-    html, body { margin:0; padding:0; }
-    #glOut { width:100%; height:100%; position:absolute; top:0; left:0; }
-    #canvasSrc { display:none; }
-    #videoSrc { position:fixed; left:0; bottom:0; }
-  </style>
 </head>
 <body>
   <div id="containerOut">
   </div>
   <canvas id="canvasSrc"></canvas>
   <video id="videoSrc" autoplay loop></video>
+  <a href="../" class="infoBox" style="left:0; top:0;">&#8617; Get the fuck out!</a>
   <script type="text/javascript">
 var containerOut
   , events
@@ -30,12 +27,20 @@ var containerOut
   , renderer
 
   , scene
-  , camera;
+  , camera
+  , gui
+  , config;
 
+var camLookAt;
+
+config = {
+  cameraVisible : false
+};
 
 if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
 
 var videoInput = document.getElementById('videoSrc');
+videoInput.style.display = "none";
 var canvasInput = document.getElementById('canvasSrc');
 
 var htracker = new headtrackr.Tracker({
@@ -43,6 +48,11 @@ var htracker = new headtrackr.Tracker({
 //, debug : true
 , fov : 90
 //, cameraOffset : 2
+});
+
+var genericMaterial = new THREE.MeshBasicMaterial({
+  color: 0xf9f9f9, 
+  wireframe : true 
 });
 
 events = {
@@ -59,29 +69,24 @@ update();
 function go()
 {
   containerOut = document.getElementById('containerOut');
+  initGui();
   initTitle(containerOut);
   initScene();
   initEvents();
   initRenderer();
+
+  postInit();
 }
 
 function initTitle( parent )
 {
-  var infoBox = document.createElement('span');
-  infoBox.style.position = "fixed";
-  //infoBox.style.width = "95%";
-  infoBox.style.bottom = "0";
-  infoBox.style.right = "0";
-  infoBox.style.textAlign = "right";
-  infoBox.style.zIndex = 420;
-  infoBox.style.padding = ".5%";
-  infoBox.style.margin = "2%";
-  infoBox.style.backgroundColor = "#FFFFFF";
-  infoBox.style.color = "#000000";
-  infoBox.style.letterSpacing = "1px";
-  infoBox.style.fontSize = "24px";
-  infoBox.innerHTML = "Glasses free, thre<strong>3D</strong>ee!";
-  parent.appendChild(infoBox);
+  var titleText = document.createElement('span');
+  titleText.classList.add('infoBox');
+  titleText.style.bottom = "0";
+  titleText.style.right = "0";
+  titleText.style.textAlign = "right";
+  titleText.innerHTML = "Mixed field parallax depth effect &#9824;";
+  parent.appendChild(titleText);
 }
 
 function initEvents()
@@ -94,10 +99,21 @@ function initDomEvents()
   window.addEventListener('resize', events.window.resize);
 }
 
+function initGui()
+{
+  gui = new dat.GUI();
+  var debugUI = gui.addFolder('Debug UI');
+  debugUI.add(config, 'cameraVisible').onChange(function() {
+    videoInput.style.display = (videoInput.style.display === "block")
+      ? "none"
+      : "block";
+  });
+}
+
 function initScene()
 {
   scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x111111, .1, 5000);
+  scene.fog = new THREE.Fog(0x333333, .1, 2000);
 
   initCamera(scene);
   initSceneObjects(scene);
@@ -107,14 +123,16 @@ function initStats()
 {
   stats = new Stats();
   stats.domElement.style.position = "fixed";
-  stats.domElement.style.top = "0px";
+  stats.domElement.style.bottom = "0px";
   stats.domElement.style.left = "0px";
+  stats.domElement.style.zIndex = "1337";
   document.body.appendChild(stats.domElement);
 }
 
 function initCamera( scene )
 {
-  camera = new THREE.PerspectiveCamera( 20, window.innerWidth / window.innerHeight, 1, 10000 );
+  camera = new THREE.PerspectiveCamera( 35, window.innerWidth / window.innerHeight, 0.01, 100000 );
+  camera.z = 500;
   scene.add( camera );
 }
 
@@ -125,10 +143,26 @@ function initSceneObjects( scene )
 
 function initTracking()
 {
-  headtrackr.controllers.three.realisticAbsoluteCameraControl(camera, 30, [0, 0, 0], new THREE.Vector3(0, 0, 0), {
-      damping : 0.5
-    , screenHeight : 49.1 
+  camLookAt = new THREE.Vector3(0, 0, 0);
+
+  headtrackr.controllers.three.realisticAbsoluteCameraControl(camera, 35, [0, 0, 0], camLookAt, {
+    damping : 0.40
+  //, screenHeight : 49.1 
   });
+
+  var tmpSphere = new THREE.Mesh(
+    new THREE.SphereGeometry( 1 ),
+    genericMaterial
+  );
+  tmpSphere.position = camLookAt;
+  
+  var camCtrl = gui.addFolder('Camera lookAt');
+  camCtrl.add(camLookAt, 'x', -500, 500);
+  camCtrl.add(camLookAt, 'y', -500, 500);
+  camCtrl.add(camLookAt, 'z', -500, 500);
+
+  scene.add( tmpSphere );
+  
   htracker.init(videoInput, canvasInput);
   htracker.start();
 }
@@ -137,7 +171,7 @@ function initRenderer()
 {
   renderer = new THREE.WebGLRenderer({
     clearAlpha  : 1,
-    clearColor  : 0x222222,
+    clearColor  : 0x111111,
     antialias   : true
   });
   renderer.setSize( window.innerWidth, window.innerHeight );
@@ -149,48 +183,57 @@ function initRenderer()
   containerOut.appendChild( renderer.domElement );
 }
 
+function postInit()
+{
+  events.window.resize(null);
+}
+
+function initWall( width, height, x, y, z, segments, material )
+{
+  var wall = new THREE.Mesh(
+		 new THREE.PlaneGeometry( (width || 500), (height || 500), (segments || 8), (segments || 8) ),
+     (material || genericMaterial)
+  );
+
+  wall.position.x = x || 0;
+  wall.position.y = y || 0;
+  wall.position.z = z || 0;
+
+  return wall;
+}
+
 function initGridBox( scene )
 {
-  var numSegments = 20;
-  var twoThirdNumSegments = Math.round(numSegments * 0.666666);
+  var bump = 1.97;
+  var numSegments = 5;
+  var width = 0.5 * window.innerWidth * bump
+    , height = 0.5 * window.innerHeight * bump
+    , depth = 1000
+    , hDepth = depth/2
+    , wallZ = -hDepth
+    , wallX = width/2
+    , wallY = (height/2) + 0;
 
-  var ceiling = new THREE.Mesh(
-		 new THREE.PlaneGeometry( 500, 1000, twoThirdNumSegments, numSegments ),
-		 new THREE.MeshBasicMaterial( { color: 0xeeeeee, wireframe : true } ) 
-  );
+  var ceiling = initWall(width, depth, 0, wallY, wallZ, numSegments);
   ceiling.rotation.x = Math.PI/2;
-  ceiling.position.y = 250;
-  //ceiling.position.z = 500-1500;
   scene.add(ceiling);
 
-  var rightWall = new THREE.Mesh(
-		 new THREE.PlaneGeometry( 500, 1000, twoThirdNumSegments, numSegments ),
-		 new THREE.MeshBasicMaterial( { color: 0xeeeeee, wireframe : true } ) 
-  );
+  var rightWall = initWall(height, depth, wallX, 0, wallZ, numSegments);
   rightWall.rotation.z = -Math.PI/2;
   rightWall.rotation.y = -Math.PI/2;
-  rightWall.position.x = 250;
-  //rightWall.position.z = 500-1500;
   scene.add(rightWall);
 
-  var leftWall = new THREE.Mesh(
-		 new THREE.PlaneGeometry( 500, 1000, twoThirdNumSegments, numSegments ),
-		 new THREE.MeshBasicMaterial( { color: 0xeeeeee, wireframe : true } ) 
-  );
+  var leftWall = initWall(height, depth, -wallX, 0, wallZ, numSegments);
   leftWall.rotation.y = Math.PI/2;
   leftWall.rotation.z = Math.PI/2;
-  leftWall.position.x = -250;
-  //leftWall.position.z = 500-1500;
   scene.add(leftWall);
 
-  var floor = new THREE.Mesh(
-		 new THREE.PlaneGeometry( 500, 1000, twoThirdNumSegments, numSegments ), 
-     new THREE.MeshBasicMaterial( { color: 0xeeeeee, wireframe : true } ) 
-  );
+  var floor = initWall(width, depth, 0, -wallY, wallZ, numSegments);
   floor.rotation.x = -Math.PI/2;
-  floor.position.y = -250;
-  //floor.position.z = 500-1500;
   scene.add(floor);
+
+  var back = initWall(width, height, 0, 0, -depth, numSegments);
+  scene.add(back);
 }
 
 function createTarget( scene )
