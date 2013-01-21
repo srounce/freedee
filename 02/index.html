@@ -26,6 +26,8 @@ var containerOut
   , stats
   , renderer
 
+  , objLoader
+
   , scene
   , camera
   , gui
@@ -51,8 +53,8 @@ var htracker = new headtrackr.Tracker({
 });
 
 var genericMaterial = new THREE.MeshBasicMaterial({
-  color: 0xf9f9f9, 
-  wireframe : true 
+  color: 0xf9f9f9 
+, wireframe : true 
 });
 
 events = {
@@ -68,6 +70,8 @@ update();
 
 function go()
 {
+  objLoader = new THREE.BinaryLoader( true );
+
   containerOut = document.getElementById('containerOut');
   initGui();
   initTitle(containerOut);
@@ -131,22 +135,24 @@ function initStats()
 
 function initCamera( scene )
 {
-  camera = new THREE.PerspectiveCamera( 35, window.innerWidth / window.innerHeight, 0.01, 100000 );
+  camera = new THREE.PerspectiveCamera( 20, window.innerWidth / window.innerHeight, 0.01, 100000 );
   camera.z = 500;
   scene.add( camera );
 }
 
 function initSceneObjects( scene ) 
 {
+  initLighting(scene);
   initGridBox(scene);
+  initCamaro(scene);
 }
 
 function initTracking()
 {
-  camLookAt = new THREE.Vector3(0, 0, 0);
+  camLookAt = new THREE.Vector3(0, 0, -100);
 
-  headtrackr.controllers.three.realisticAbsoluteCameraControl(camera, 35, [0, 0, 0], camLookAt, {
-    damping : 0.40
+  headtrackr.controllers.three.realisticAbsoluteCameraControl(camera, 20, [0, 0, 100], camLookAt, {
+    damping : 0.30
   //, screenHeight : 49.1 
   });
 
@@ -171,10 +177,13 @@ function initRenderer()
 {
   renderer = new THREE.WebGLRenderer({
     clearAlpha  : 1,
-    clearColor  : 0x111111,
+    clearColor  : 0x333333,
     antialias   : true
   });
   renderer.setSize( window.innerWidth, window.innerHeight );
+    
+  renderer.shadowMapEnabled = true;
+  renderer.shadowMapSoft = true;
 
   initStats();
 
@@ -195,6 +204,9 @@ function initWall( width, height, x, y, z, segments, material )
      (material || genericMaterial)
   );
 
+  wall.recieveShadow = true;
+  wall.castShadow = true;
+
   wall.position.x = x || 0;
   wall.position.y = y || 0;
   wall.position.z = z || 0;
@@ -202,13 +214,29 @@ function initWall( width, height, x, y, z, segments, material )
   return wall;
 }
 
+function initLighting( scene )
+{
+  var skylight = new THREE.DirectionalLight(0xFAFAFF);
+  skylight.castShadow = true;
+  // skylight.shadowCameraVisible = true;
+
+  skylight.shadowCameraTop = 15;
+  skylight.shadowCameraRight = 15;
+  skylight.shadowCameraBottom = -15;
+  skylight.shadowCameraLeft = -15;
+
+  skylight.translateX(150);
+  skylight.translateY(150);
+  scene.add(skylight);
+}
+
 function initGridBox( scene )
 {
-  var bump = 1.97;
+  var bump = 1;
   var numSegments = 5;
   var width = 0.5 * window.innerWidth * bump
     , height = 0.5 * window.innerHeight * bump
-    , depth = 1000
+    , depth = 500
     , hDepth = depth/2
     , wallZ = -hDepth
     , wallX = width/2
@@ -234,6 +262,34 @@ function initGridBox( scene )
 
   var back = initWall(width, height, 0, 0, -depth, numSegments);
   scene.add(back);
+}
+
+function initCamaro( scene )
+{
+  document.body.appendChild( objLoader.statusDomElement );
+
+  objLoader.load('../assets/obj/camaro/CamaroNoUv_bin.js', function( geometry ) {
+
+    objLoader.statusDomElement.style.display = "none";
+
+    var carMat = new THREE.MeshLambertMaterial({ 
+      color: 0xEEFAFF
+    //, wireframe : true 
+    });
+    var carMesh = new THREE.Mesh(geometry, carMat);
+    carMesh.recieveShadow = true;
+    carMesh.castShadow = true;
+    
+    carMesh.position.y = -50;
+    carMesh.position.z = 50;
+    carMesh.scale.set(20, 20, 20);
+    
+    scene.add( carMesh );
+
+    try{
+      next();
+    } catch(e) {}
+  });
 }
 
 function createTarget( scene )
